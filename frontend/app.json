@@ -8,10 +8,7 @@
     "scheme": "liloapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "extra": {
-      "supabaseUrl": "https://foflljjfrftpplyrjzeq.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvZmxsampmcmZ0cHBseXJqemVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyMjY4MzksImV4cCI6MjA2ODgwMjgzOX0.8wYHavJBDX9s5CiDEFBO75UCbHs9tstoFrZY_yA_GB4"
-    },
+    "extra": {},
     "ios": {
       "supportsTablet": true
     },
