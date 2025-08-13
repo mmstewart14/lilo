@@ -4,9 +4,11 @@
 import { AppRoutes } from "@/constants/AppRoutes";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemedText } from "../components/ThemedText";
+import api from "../services/api";
+import { devLog } from "../utils/devLog";
 import {
   OnboardingProvider,
   useOnboarding,
@@ -108,6 +110,33 @@ function OnboardingFlow() {
     }
   };
 
+  const handleSignOut = async () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out? This will reset your session for testing.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              devLog("Signing out from onboarding page");
+              await api.auth.signout();
+              router.replace("/(auth)/signin");
+            } catch (error) {
+              devLog("Sign out error:", error);
+              Alert.alert("Error", "Failed to sign out. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading || checkingCompletion) {
     return (
       <View style={styles.loadingContainer}>
@@ -136,6 +165,11 @@ function OnboardingFlow() {
           onSkip={handleComplete}
         />
       )}
+      
+      {/* Debug Sign Out Button */}
+      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+        <ThemedText style={styles.signOutText}>🔓 Sign Out (Debug)</ThemedText>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -162,5 +196,22 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  signOutButton: {
+    position: "absolute",
+    bottom: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: "#ff4444",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    opacity: 0.8,
+  },
+  signOutText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lilo/backend/internal/domain"
+	"github.com/lilo/backend/pkg/response"
 )
 
 // SupabaseJWTClaims represents the claims in a Supabase JWT token
@@ -29,20 +30,20 @@ func AuthMiddleware(userService domain.UserService, jwtSecret string) func(http.
 			// Get the Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, "Authorization header required", http.StatusUnauthorized)
+				response.Unauthorized(w, "Authorization header required")
 				return
 			}
 
 			// Check if the header has the Bearer prefix
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+				response.Unauthorized(w, "Invalid authorization format")
 				return
 			}
 
 			// Extract the token
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 			if tokenString == "" {
-				http.Error(w, "Token cannot be empty", http.StatusUnauthorized)
+				response.Unauthorized(w, "Token cannot be empty")
 				return
 			}
 
@@ -58,26 +59,26 @@ func AuthMiddleware(userService domain.UserService, jwtSecret string) func(http.
 			})
 
 			if err != nil {
-				http.Error(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+				response.Unauthorized(w, "Invalid token: "+err.Error())
 				return
 			}
 
 			// Check if the token is valid
 			if !token.Valid {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				response.Unauthorized(w, "Invalid token")
 				return
 			}
 
 			// Extract claims
 			claims, ok := token.Claims.(*SupabaseJWTClaims)
 			if !ok {
-				http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+				response.Unauthorized(w, "Invalid token claims")
 				return
 			}
 
 			// Check if token is expired
 			if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()) {
-				http.Error(w, "Token expired", http.StatusUnauthorized)
+				response.Unauthorized(w, "Token expired")
 				return
 			}
 
@@ -98,11 +99,11 @@ func AuthMiddleware(userService domain.UserService, jwtSecret string) func(http.
 
 					err = userService.CreateUserFromSupabase(user)
 					if err != nil {
-						http.Error(w, "Failed to create user", http.StatusInternalServerError)
+						response.InternalServerError(w, "Failed to create user")
 						return
 					}
 				} else {
-					http.Error(w, "User not found", http.StatusUnauthorized)
+					response.Unauthorized(w, "User not found")
 					return
 				}
 			}
