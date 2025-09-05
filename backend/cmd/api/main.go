@@ -14,6 +14,7 @@ import (
 	"github.com/lilo/backend/internal/repository"
 	"github.com/lilo/backend/internal/service"
 	"github.com/lilo/backend/pkg/middleware"
+	"github.com/lilo/backend/pkg/response"
 )
 
 func main() {
@@ -56,9 +57,7 @@ func main() {
 
 	// Register routes
 	router.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		response.Success(w, map[string]string{"status": "ok"})
 	})
 
 	// User routes

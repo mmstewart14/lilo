@@ -1,248 +1,11 @@
 /**
  * API service for the Lilo outfit finder application
+ * Handles Supabase authentication and integrates with backend client
  */
-import { ApiResponse, User } from "../types";
-import { supabase } from "./supabase";
-
-/**
- * Generic API request function
- */
-async function request<T>(
-  endpoint: string,
-  method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
-  data?: any,
-  headers?: Record<string, string>
-): Promise<ApiResponse<T>> {
-  try {
-    console.log(endpoint);
-
-    // Get the current session for authentication
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-
-    console.log(sessionData);
-
-    // Add authorization header if token exists
-    const authHeaders = token
-      ? { Authorization: `Bearer ${token}`, ...headers }
-      : headers;
-
-    const url = `${process.env.EXPO_PUBLIC_API_BASE_URL}${endpoint}`;
-    const options: RequestInit = {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders,
-      },
-    };
-
-    if (data) {
-      options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(url, options);
-
-    const responseData = await response.json();
-
-    console.log(responseData);
-
-    return {
-      data: responseData.data,
-      message: responseData.message,
-      error: responseData.error,
-      status: response.status,
-    };
-  } catch (error) {
-    console.error(
-      "API request failed:",
-      error instanceof Error ? error.message : error
-    );
-    return {
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-      status: 500,
-    };
-  }
-}
-
-/**
- * API service object with methods for different endpoints
- */
-const api = {
-  // Auth endpoints using Supabase
-  auth: {
-    signup: async (email: string, password: string) => {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        return {
-          error: error.message,
-          status: 400,
-        };
-      }
-
-      // Create user profile in our backend
-      if (data.user) {
-        await request("/api/auth/signup", "POST", {
-          supabaseId: data.user.id,
-          email: data.user.email,
-        });
-      }
-
-      return {
-        data: {
-          token: data.session?.access_token,
-          user: mapSupabaseUser(data.user),
-        },
-        status: 201,
-      };
-    },
-
-    signin: async (email: string, password: string) => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        return {
-          error: error.message,
-          status: 401,
-        };
-      }
-
-      return {
-        data: {
-          token: data.session?.access_token,
-          user: mapSupabaseUser(data.user),
-        },
-        status: 200,
-      };
-    },
-
-    signout: async () => {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        return {
-          error: error.message,
-          status: 500,
-        };
-      }
-
-      return {
-        status: 200,
-      };
-    },
-
-    getUser: async () => {
-      const { data, error } = await supabase.auth.getUser();
-
-      if (error || !data.user) {
-        return {
-          error: error?.message || "User not found",
-          status: 401,
-        };
-      }
-
-      // Get additional user data from our backend
-      const userResponse = await request<User>("/api/users/profile", "GET");
-
-      if (userResponse.error) {
-        return {
-          data: mapSupabaseUser(data.user),
-          status: 200,
-        };
-      }
-
-      return {
-        data: {
-          ...mapSupabaseUser(data.user),
-          ...userResponse.data,
-        },
-        status: 200,
-      };
-    },
-
-    resetPassword: async (email: string) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-
-      if (error) {
-        return {
-          error: error.message,
-          status: 400,
-        };
-      }
-
-      return {
-        message: "Password reset email sent",
-        status: 200,
-      };
-    },
-  },
-
-  // User profile endpoints
-  users: {
-    getProfile: () => request("/api/users/profile", "GET"),
-    updateProfile: (data: any) => request("/api/users/profile", "PUT", data),
-    getStyleProfile: () => request("/api/users/style-profile", "GET"),
-    updateStyleProfile: (data: any) =>
-      request("/api/users/style-profile", "PUT", data),
-  },
-
-  // Wardrobe endpoints
-  wardrobe: {
-    getItems: (filters?: any) => request("/api/wardrobe/items", "GET", filters),
-    addItem: (item: any) => request("/api/wardrobe/items", "POST", item),
-    getItem: (id: string) => request(`/api/wardrobe/items/${id}`, "GET"),
-    updateItem: (id: string, data: any) =>
-      request(`/api/wardrobe/items/${id}`, "PUT", data),
-    deleteItem: (id: string) => request(`/api/wardrobe/items/${id}`, "DELETE"),
-    getCategories: () => request("/api/wardrobe/categories", "GET"),
-  },
-
-  // Outfit endpoints
-  outfits: {
-    getOutfits: (filters?: any) => request("/api/outfits", "GET", filters),
-    createOutfit: (outfit: any) => request("/api/outfits", "POST", outfit),
-    getOutfit: (id: string) => request(`/api/outfits/${id}`, "GET"),
-    updateOutfit: (id: string, data: any) =>
-      request(`/api/outfits/${id}`, "PUT", data),
-    deleteOutfit: (id: string) => request(`/api/outfits/${id}`, "DELETE"),
-    favoriteOutfit: (id: string) =>
-      request(`/api/outfits/${id}/favorite`, "POST"),
-    unfavoriteOutfit: (id: string) =>
-      request(`/api/outfits/${id}/favorite`, "DELETE"),
-  },
-
-  // Recommendation endpoints
-  recommendations: {
-    getDaily: () => request("/api/recommendations/daily", "GET"),
-    getExplore: (filters?: any) =>
-      request("/api/recommendations/explore", "GET", filters),
-    submitFeedback: (recommendationId: string, feedback: string) =>
-      request("/api/recommendations/feedback", "POST", {
-        recommendationId,
-        feedback,
-      }),
-  },
-
-  // Reflection endpoints
-  reflections: {
-    submitReflection: (data: any) => request("/api/reflections", "POST", data),
-    getReflections: () => request("/api/reflections", "GET"),
-    getInsights: () => request("/api/reflections/insights", "GET"),
-  },
-
-  // Wishlist endpoints
-  wishlist: {
-    getItems: () => request("/api/wishlist", "GET"),
-    addItem: (itemId: string) => request("/api/wishlist", "POST", { itemId }),
-    removeItem: (id: string) => request(`/api/wishlist/${id}`, "DELETE"),
-  },
-};
+import { User } from "../types";
+import { supabaseClient } from "./supabaseClient";
+import { backendClient } from "./backendClient";
+import { devLog, devError } from "../utils/devLog";
 
 /**
  * Helper function to map Supabase user to our User type
@@ -260,4 +23,175 @@ function mapSupabaseUser(supabaseUser: any): User {
   };
 }
 
+/**
+ * Helper function to check if user is authenticated
+ */
+async function checkAuthStatus() {
+  const {
+    data: { session },
+    error,
+  } = await supabaseClient.auth.getSession();
+
+  devLog("Auth status check", {
+    hasSession: !!session,
+    sessionId: session?.user?.id,
+    error,
+  });
+
+  return { session, error };
+}
+
+/**
+ * API service object with methods for different endpoints
+ */
+const api = {
+  // Auth endpoints using Supabase
+  auth: {
+    signup: async (email: string, password: string) => {
+      devLog("Signing up user:", email);
+
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        devError("Signup failed:", error);
+        return {
+          error: error.message,
+          status: 400,
+        };
+      }
+
+      // Create user profile in our backend
+      if (data.user) {
+        devLog("Creating user profile in backend");
+        const backendResponse = await backendClient.user.createProfile({
+          supabaseId: data.user.id,
+          email: data.user.email!,
+        });
+
+        if (backendResponse.error) {
+          devError("Backend profile creation failed:", backendResponse.error);
+        }
+      }
+
+      return {
+        data: {
+          token: data.session?.access_token,
+          user: mapSupabaseUser(data.user),
+        },
+        status: 201,
+      };
+    },
+
+    signin: async (email: string, password: string) => {
+      devLog("Signing in user:", email);
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        devError("Signin failed:", error);
+        return {
+          error: error.message,
+          status: 401,
+        };
+      }
+
+      devLog("Signin successful");
+      return {
+        data: {
+          token: data.session?.access_token,
+          user: mapSupabaseUser(data.user),
+        },
+        status: 200,
+      };
+    },
+
+    signout: async () => {
+      devLog("Signing out user");
+
+      const { error } = await supabaseClient.auth.signOut();
+
+      if (error) {
+        devError("Signout failed:", error);
+        return {
+          error: error.message,
+          status: 500,
+        };
+      }
+
+      devLog("Signout successful");
+      return {
+        status: 200,
+      };
+    },
+
+    getUser: async () => {
+      const { data, error } = await supabaseClient.auth.getUser();
+
+      if (error || !data.user) {
+        devError("Get user failed:", error);
+        return {
+          error: error?.message || "User not found",
+          status: 401,
+        };
+      }
+
+      // Get additional user data from our backend
+      const userResponse = await backendClient.user.getProfile();
+
+      if (userResponse.error) {
+        devLog("Backend profile not found, returning Supabase user only");
+        return {
+          data: mapSupabaseUser(data.user),
+          status: 200,
+        };
+      }
+
+      return {
+        data: {
+          ...mapSupabaseUser(data.user),
+          ...userResponse.data,
+        },
+        status: 200,
+      };
+    },
+
+    resetPassword: async (email: string) => {
+      devLog("Resetting password for:", email);
+
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
+
+      if (error) {
+        devError("Password reset failed:", error);
+        return {
+          error: error.message,
+          status: 400,
+        };
+      }
+
+      return {
+        message: "Password reset email sent",
+        status: 200,
+      };
+    },
+  },
+
+  // Backend endpoints - delegate to backend client
+  users: backendClient.user,
+  wardrobe: backendClient.wardrobe,
+  outfits: backendClient.outfits,
+  recommendations: backendClient.recommendations,
+  reflections: backendClient.reflections,
+  wishlist: backendClient.wishlist,
+
+  // Backend health check
+  healthCheck: () => backendClient.healthCheck(),
+};
+
 export default api;
+export { checkAuthStatus, backendClient };
